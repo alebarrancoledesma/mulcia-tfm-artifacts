@@ -1,0 +1,594 @@
+sábado 19:04
+DAY-01.md
+Archivo
+bueno pues hemos currado un dia y esto es lo que se ha hecho. analiza y dame feedback claro sin buenismo y tal vale?
+Pegado text(9).txt
+Documento
+esta salida es normal? el goal me parece algo extraño
+
+
+Pegado text(10).txt
+Documento
+cual es el deposito aqui? es closed no?
+
+Sí. Haz fork de numeric-fast-downward también.
+
+Repo:
+https://github.com/Kurorororo/numeric-fast-downward
+
+Tiene sentido porque aquí sí es bastante probable que acabemos:
+
+añadiendo una heurística propia;
+tocando/añadiendo un plugin C++;
+quizá ajustando CMake/build si alguna dependencia antigua molesta;
+añadiendo scripts de benchmark;
+documentando exactamente nuestras configuraciones.
+
+Yo mantendría:
+
+fork didp-models
+    → CVRP + conversión a PDDL
+
+fork numeric-fast-downward
+    → solver + heurísticas + nuestra h(s)
+
+Y nada más por ahora. No mezcles repos.
+
+Después del fork, clónalo y vamos directos al build y al primer astar(irhmax()).
+
+esa es la mejor implementacion no?
+
+Sí, para nuestro caso es la mejor implementación práctica que hemos encontrado.
+
+No porque sea “la mejor de todo numeric planning en abstracto”, sino porque reúne justo lo que necesitamos:
+
+lee PDDL numérico como el CVRP de Kuroiwa;
+está desarrollado por Kuroiwa/Piacentini y conectado con la misma línea de trabajo;
+incluye heurísticas estándar fuertes como irhmax() y lmcutnumeric(...);
+permite seleccionar heurísticas desde la línea de comandos;
+y, crucialmente para el TFM, podemos modificar el código C++ y añadir nuestra propia heurística.
+
+Además, el propio repo documenta exactamente las configuraciones que nos interesan:
+
+astar(irhmax())
+
+y:
+
+astar(lmcutnumeric(...))
+
+incluyendo las variantes de Numeric LM-Cut de Kuroiwa.
+
+Así que, si nuestro objetivo es:
+
+CVRP PDDL
+→ heurísticas estándar
+→ custom h(s)
+→ LLM-generated h(s)
+
+sí: yo elegiría Kurorororo/numeric-fast-downward.
+
+El único inconveniente es que es un repo de investigación antiguo y el README lo llama work in progress; usa Python 2.7 para el driver y puede requerir algún ajuste de compilación. Pero eso es un problema de ingeniería, no de encaje científico.
+
+Yo ya no buscaría otro solver antes de probar éste. Fork, compilar, astar(irhmax()), y vemos qué pasa.
+
+y eso de astar? no sabia que se usaba a* para esto
+
+Sí, A* se usa muchísimo en planificación. La diferencia es que no estás aplicándolo sobre una cuadrícula como en pathfinding, sino sobre el espacio de estados definido por el PDDL.
+
+En tu CVRP, un estado puede verse conceptualmente como:
+
+posición actual
+clientes visitados
+carga usada
+vehículos usados
+coste acumulado
+
+Desde ese estado, las acciones PDDL generan sucesores:
+
+visit(cX)
+visit-via-depot(cX)
+return-to-depot
+
+Y el planner hace búsqueda:
+
+s0
+├── s1
+├── s2
+└── s3
+    ├── ...
+    └── goal
+
+A* ordena esos estados mediante:
+
+$$ f(s)=g(s)+h(s) $$
+
+donde:
+
+\(g(s)\): coste real acumulado hasta ese estado.
+\(h(s)\): estimación del coste que falta hasta completar el problema.
+
+En tu CVRP:
+
+$$ g(s)=\text{distancia total recorrida hasta ahora} $$
+
+y una heurística podría intentar estimar:
+
+$$ h(s)\approx\text{distancia mínima restante para servir clientes y volver al depot} $$
+
+Por eso encaja perfectamente con tu TFM. Lo que queremos que genere el LLM es precisamente:
+
+$$ \boxed{h(s)} $$
+
+No A* entero.
+
+Y aquí aparece una diferencia importante con Corrêa
+
+Corrêa usaba principalmente Greedy Best-First Search (GBFS):
+
+$$ f(s)=h(s) $$
+
+Es decir, ignora el coste acumulado para decidir qué expandir primero.
+
+A* usa:
+
+$$ f(s)=g(s)+h(s) $$
+
+Eso tiene consecuencias muy importantes.
+
+Si \(h(s)\) es admisible, es decir:
+
+$$ h(s)\le h^*(s) $$
+
+y nunca sobreestima el coste real restante, A* puede garantizar una solución óptima bajo las condiciones habituales.
+
+Por eso Numeric LM-Cut es interesante: está diseñada como heurística para búsqueda óptima.
+
+Para visualizarlo con CVRP:
+
+Supón dos estados:
+
+Estado A
+coste recorrido = 100
+h(A) = 150
+
+Estado B
+coste recorrido = 200
+h(B) = 20
+
+GBFS:
+
+A → 150
+B → 20   ← elige B
+
+A*:
+
+A → 100 + 150 = 250
+B → 200 + 20  = 220   ← elige B
+
+Pero en otro caso:
+
+A:
+g = 50
+h = 100
+f = 150
+
+B:
+g = 300
+h = 10
+f = 310
+
+GBFS se iría a B porque 10 < 100.
+
+A* se iría a A porque:
+
+$$ 150 < 310 $$
+
+Ese equilibrio entre lo que ya me ha costado y lo que creo que falta es precisamente la filosofía de A*.
+
+Y esto además te abre una decisión metodológica importante para el TFM:
+
+LLM heuristic + GBFS
+
+estudia principalmente qué bien guía la búsqueda.
+
+Mientras que:
+
+LLM heuristic + A*
+
+entra más directamente en cost-optimal planning, pero si queremos garantías de optimalidad tenemos que estudiar si la heurística generada es admisible.
+
+Así que sí: que aparezca astar(...) aquí es completamente normal. De hecho, en planificación heurística clásica es una de las configuraciones más importantes.
+
+Pegado text(20260906-093540).txt
+Documento
+pasan cosas eh
+parece que está andando
+Pegado text(20260906-135732).txt
+Documento
+lancé hace un rato con lmcutnumeric() lo mismo que con blind y no acababa...
+
+
+Pegado text(20260906-151854).txt
+Documento
+Pegado text(20260906-152821).txt
+Documento
+vale, te paso alguna heuristica mas compleja por si te sirve de ayuda
+
+esto q te paso el ffheuristic
+Pegado text(20260906-164544).txt
+Documento
+con esto ya deberias saber que se puede usar y tal no? hazme un md por favor para no perder hallazgos, con lo que hemos inferido de hff y de esto 
+Loggi-n401-k23.vrp
+Archivo
+crees que este tipo de problemas se resuelve o es mas para grasp y eso
+README.md
+Archivo
+que recomiendas para los experimentos. que dataset. y que hacemos si particionamos uno concreto para train val o que
+
+Sí, porque ahora ya no parece simplemente “meter un LLM en PlanForge y ver qué pasa”. Empieza a tener una pregunta experimental bastante clara.
+
+La parte buena del split es que te permite separar cosas que antes estaban mezcladas: generación, selección y evaluación real. Y además la especialización por familia le da al LLM un papel más interesante: no solo inventar una heurística genérica, sino adaptar una estrategia algorítmica a una distribución concreta de problemas.
+
+Lo fuerte sería poder acabar diciendo algo del estilo:
+
+Las heurísticas generadas con ejemplos de una familia mejoran dentro de esa distribución, pero su rendimiento cae al transferirse a otra familia.
+
+o, incluso más interesante:
+
+A pesar de haberse generado con ejemplos de una familia, algunas heurísticas mantienen buen rendimiento fuera de distribución, lo que sugiere que el LLM ha capturado regularidades más generales del CVRP.
+
+Eso ya da para analizar de verdad especialización vs generalización.
+
+Y además encaja muy bien con la propuesta oficial, porque ahí estaban explícitamente “generalización, robustez, coste computacional e interpretabilidad”. Ahora esas palabras dejan de ser apartados decorativos y pasan a estar metidas en el diseño experimental desde el principio.
+
+La clave ahora es no cargárnoslo añadiendo veinte familias. Yo haría A y B muy bien, más la heurística genérica y los baselines clásicos. Si eso sale sólido, ya tienes un experimento principal bastante serio. Luego, si sobra tiempo, metes una tercera familia o un test externo más agresivo.
+
+me gusta porque salga lo que salga ya hay una idea mas solida con rigor tipo IA de leakage y tal
+
+Exacto. Ahí es donde el trabajo gana bastante.
+
+Porque aunque luego los resultados sean mediocres, ya no dependes de “que la heurística LLM gane”. El diseño experimental en sí tiene valor:
+
+separas PROMPT / DEV / TEST;
+controlas leakage;
+distingues generalización intra-familia y OOD;
+comparas especialización frente a heurística genérica;
+congelas la heurística antes del test;
+mantienes la estrategia de búsqueda fija para no contaminar la comparación;
+registras fallos de compilación, timeouts y coste de evaluación, no solo el mejor caso.
+
+Eso ya es mucho más “IA experimental” de verdad y menos demo.
+
+Además, si sale que la especialización no mejora, sigue siendo interesante. Puedes concluir que el LLM no está aprovechando suficientemente la estructura de familia, o que genera estrategias demasiado genéricas. Si mejora en A pero cae en B, tienes evidencia de especialización. Si mejora en ambas, tienes evidencia de transferencia. Si la genérica gana siempre, también es una conclusión útil.
+
+Y el tema del leakage aquí no es decorativo. Como ya viste, algunas familias de CVRPLIB están relacionadas entre sí, así que una partición ingenua puede dar una falsa sensación de generalización. Eso te permite justificar metodológicamente por qué no haces un split aleatorio sin más.
+
+La idea fuerte podría resumirse así:
+
+No evaluamos únicamente si un LLM puede generar una heurística, sino si puede generar una heurística especializada a partir de ejemplos de una distribución, evitando contaminación entre generación, selección y evaluación final, y midiendo su capacidad de generalización y transferencia.
+
+Eso ya suena a una contribución experimental bastante sólida.
+
+eso es mas interesante pues si. busca si hay literatura similar o papers para saber el nivel de innovacion de esto
+
+Sí. He buscado bastante alrededor de LLM-generated heuristics + planning + CVRP + specialization/generalization, y el resultado es interesante: la idea general ya tiene literatura muy cercana, especialmente en 2026, pero la combinación concreta que estamos planteando sigue teniendo bastante personalidad.
+
+La conclusión importante es esta:
+
+No vendería como novedad “usar un LLM para generar heurísticas especializadas según una distribución”. Eso ya existe.
+
+Sí veo defendible como contribución propia estudiar sistemáticamente esa especialización dentro de planificación heurística PDDL/numeric planning sobre CVRP, con heurísticas \(h(s)\) reutilizables por familia y evaluación cruzada entre familias.
+
+Qué hay ya y cuánto se parece
+Trabajo	Qué hace	Cercanía con nosotros
+Corrêa et al., NeurIPS 2025	LLM genera código de heurísticas para planificación clásica; usa PDDL, ejemplos de tareas, TRAIN y test OOD	🔴 Muy cercano al núcleo
+Tuisov et al., ICAPS 2026	Heurísticas LLM en Rust para planificación con successor generators, incluso problemas numéricos	🔴 Muy cercano técnicamente
+EoH, ICML 2024	Automatic Heuristic Design mediante LLM + evolución	🟠 Base conceptual
+EoH-S, AAAI 2026	Diseña varias heurísticas complementarias para diferentes distribuciones/tamaños, incluyendo CVRP	🔴 Muy cercano a nuestra idea de especialización
+RAISE, 2026	Estudia explícitamente distribution shift y robustez de heurísticas LLM	🟠 Muy relevante para nuestro OOD
+Illuminating Heuristic Design, IEEE TEVC 2026	Archivo de heurísticas especializadas para clases de instancias, incluyendo routing	🔴 Conceptualmente muy cercano
+AILS-AHD, 2026	LLM diseña heurísticas dentro de un solver especializado CVRP	🟠 Mismo problema, arquitectura distinta
+SpecAHD, 2026	Heurísticas especializadas para diferentes regiones de problemas grandes de routing	🟠 Especialización, pero dentro de instancia
+VRPAgent, 2025	LLM descubre operadores para metaheurísticas VRP	🟡 Routing, pero distinto objeto algorítmico
+1. Corrêa ya hace más de lo que parecía
+
+Esto es importante para nuestro diseño.
+
+Corrêa no le da simplemente el domain.pddl al LLM. Su pipeline proporciona descripción del dominio, ejemplos de tareas PDDL, ejemplos de heurísticas de otros dominios y código del planner. Después genera varios candidatos, los evalúa sobre un TRAIN y selecciona el mejor.
+
+De hecho, su propio repositorio dice que al añadir un dominio debes proporcionar:
+
+domain.pddl
+p01.pddl      → instancia pequeña
+p99.pddl      → instancia grande
+example-state
+example-static
+
+y esos ejemplos entran en el prompt.
+
+Después evalúan sobre tareas OOD mucho más grandes. Por ejemplo, en Transport los tamaños de entrenamiento llegan a 7 vehículos mientras que el test llega hasta 50.
+
+Por tanto:
+
+$$ \text{ejemplos de instancias} \rightarrow LLM \rightarrow h_{\text{domain}}(s) \rightarrow \text{unseen instances} $$
+
+eso ya es Corrêa.
+
+Pero aquí está nuestra diferencia interesante:
+
+Corrêa quiere:
+
+$$ h_{\text{Transport}} $$
+
+para todo el dominio Transport.
+
+Nosotros queremos preguntar si dentro del mismo dominio CVRP existe valor en generar:
+
+$$ h_A,\quad h_B,\quad h_G $$
+
+según la distribución de instancias.
+
+Eso es otro nivel de análisis.
+
+2. EoH-S es probablemente el paper que más nos obliga a ser cuidadosos
+
+Este salió en AAAI 2026 y es muy relevante.
+
+Su propia motivación es prácticamente:
+
+los métodos existentes diseñan una única heurística para todas las instancias y esto puede producir mala generalización entre distribuciones y tamaños.
+
+Su solución, EoH-S, genera un conjunto pequeño de heurísticas complementarias, de forma que distintas heurísticas funcionen mejor para distintas instancias. Lo prueban en TSP, bin packing y, sí, CVRP.
+
+Esto significa que ya no podríamos decir:
+
+“Somos los primeros en observar que una única heurística LLM puede no ser apropiada para distribuciones CVRP distintas.”
+
+No.
+
+Pero fíjate en la diferencia con lo nuestro.
+
+EoH-S hace esencialmente:
+
+$$ \text{conjunto heterogéneo de problemas} \rightarrow \{h_1,h_2,\ldots,h_k\} $$
+
+buscando complementariedad.
+
+Nosotros proponemos un experimento controlado:
+
+$$ A_{\text{prompt}} \rightarrow h_A $$ $$ B_{\text{prompt}} \rightarrow h_B $$ $$ \text{CVRP genérico} \rightarrow h_G $$
+
+y después:
+
+$$ \begin{array}{c|cc} & A_{\text{test}} & B_{\text{test}}\\ \hline h_A & ✓ & ✓\\ h_B & ✓ & ✓\\ h_G & ✓ & ✓ \end{array} $$
+
+Nuestro objetivo no sería construir el mejor ensemble de heurísticas.
+
+Es aislar experimentalmente el efecto del contexto de distribución proporcionado al LLM.
+
+Esa diferencia me parece importante.
+
+3. Y acaba de aparecer literatura exactamente sobre distribution shift
+
+RAISE, de junio de 2026, parte precisamente de que los métodos de Automatic Heuristic Design optimizan sobre un conjunto fijo de entrenamiento y pueden degradarse muchísimo cuando cambia la distribución.
+
+Ellos introducen búsqueda adversarial de instancias para encontrar distribuciones difíciles durante el propio diseño de la heurística. Lo evalúan sobre varias familias de distribución, incluyendo Online Vehicle Routing.
+
+Eso es buenísimo para nosotros como related work porque legitima nuestra pregunta:
+
+$$ \text{¿qué ocurre con } h \text{ cuando } P_{\text{train}}\neq P_{\text{test}}? $$
+
+No estamos inventándonos una preocupación artificial por el leakage/OOD. Es un problema de investigación actual en AHD.
+
+4. Y hay uno aún más cercano que salió literalmente el mes pasado
+
+Esto me sorprendió bastante.
+
+En agosto de 2026 apareció en IEEE Transactions on Evolutionary Computation, en Early Access:
+
+“Illuminating Heuristic Design: Language-Model-Driven Quality-Diversity Evolution for Combinatorial Optimization.”
+
+Su idea es mantener un archivo de heurísticas diversas donde cada heurística está especializada para una clase concreta de instancias. Luego un selector elige la adecuada para una instancia nueva. Lo prueban en vehicle routing, TSP y scheduling, incluyendo cambios de distribución.
+
+Eso está conceptualmente muy cerca de:
+
+“una \(h\) puede ser buena para una familia y otra \(h\) para otra”.
+
+Así que tampoco vendería esa idea abstracta como nuestra novedad.
+
+Pero otra vez: ellos están haciendo quality-diversity automatic heuristic design para optimización combinatoria, con un archivo y selección online.
+
+No están estudiando:
+
+PDDL numeric CVRP
+        ↓
+planner general-purpose
+        ↓
+state s
+        ↓
+h(s) = estimate remaining planning cost
+        ↓
+A* / GBFS
+
+Ahí sigue estando nuestra identidad.
+
+5. En CVRP especializado ya hay una barbaridad de movimiento
+
+También han salido trabajos donde el LLM diseña componentes para solvers de routing.
+
+AILS-AHD integra LLMs para generar y optimizar ruin heuristics dentro de Adaptive Iterated Local Search para CVRP, comparándolo contra HGS y AILS-II.
+
+VRPAgent genera operadores problem-specific mediante LLM y los integra en una metaheurística para CVRP, VRPTW y otras variantes.
+
+Y hay incluso un artículo de 2026 sobre Automatic Heuristic Design para vehicle-drone routing.
+
+Por tanto, otra cosa que no debemos afirmar es:
+
+“Nadie ha utilizado LLMs para diseñar heurísticas de CVRP.”
+
+Eso sería falso en 2026.
+
+Entonces, ¿dónde veo nuestra aportación?
+
+Aquí es donde creo que empieza a quedar bastante bien.
+
+No intentaría vender una única gran idea “completamente nueva”. Presentaría la contribución como la intersección de cuatro cosas:
+
+                LLM heuristic synthesis
+                         │
+                         │
+       ┌─────────────────┼─────────────────┐
+       │                 │                 │
+Numeric/PDDL       CVRP families     specialization
+planning                           / generalization
+       │                 │                 │
+       └─────────────────┼─────────────────┘
+                         │
+                h(s) de búsqueda
+                en PlanForge
+A. Extensión de Corrêa a numeric planning/CVRP
+
+Corrêa es planificación clásica proposicional con Pyperplan/Python.
+
+Nosotros:
+
+Numeric PDDL
+CVRP con demandas/capacidad/costes
+PlanForge
+Rust
+
+Pero aquí tampoco diría “primera extensión a numeric planning”, porque Tuisov et al. ICAPS 2026 ya permiten problemas con restricciones numéricas complejas mediante successor generators y generan heurísticas Rust.
+
+La diferencia es que ellos deliberadamente van más allá de PDDL, usando la descripción mediante successor generators.
+
+Nosotros mantenemos:
+
+$$ \boxed{\text{PDDL numeric planning}} $$
+
+como sistema formal de planificación.
+
+B. CVRP como dominio de planificación, no como solver especializado
+
+Esto sí distingue bastante el trabajo de EoH/VRPAgent/AILS-AHD.
+
+Ellos diseñan cosas como:
+
+ruin operator
+repair operator
+local-search heuristic
+construction rule
+
+Nosotros generamos:
+
+$$ h(s):S\rightarrow\mathbb{R} $$
+
+que evalúa un estado de planificación y guía A*/GBFS.
+
+Eso es una diferencia conceptual importante.
+
+C. El experimento generic vs family-specialized
+
+Creo que aquí está la parte más bonita del TFM.
+
+No:
+
+“Generamos una heurística y vemos si funciona.”
+
+Sino:
+
+$$ \boxed{ \text{¿Qué conocimiento específico de una distribución puede convertir un LLM en código heurístico reutilizable?} } $$
+
+Controlamos:
+
+mismo dominio
+mismo planner
+misma API
+mismo modelo
+mismo prompt base
+mismo search
+
+y cambiamos:
+
+ejemplos A
+vs
+ejemplos B
+vs
+sin información de familia
+
+Esto nos permite atribuir diferencias a la especialización inducida por contexto mucho mejor que muchos trabajos de AHD.
+
+D. Leakage + transferencia cruzada
+
+Y esta parte le da bastante rigor:
+
+A-PROMPT
+A-DEV
+A-TEST
+
+B-PROMPT
+B-DEV
+B-TEST
+
+y luego:
+
+$$ h_A\rightarrow A_{\text{test}} $$
+
+frente a:
+
+$$ h_A\rightarrow B_{\text{test}} $$
+
+Eso permite separar:
+
+$$ \text{specialization} $$
+
+de:
+
+$$ \text{generalization ID} $$
+
+de:
+
+$$ \text{generalization OOD}. $$
+
+Y además tienes el detalle poco trivial de CVRPLIB: no puedes considerar todas las familias estadísticamente independientes porque algunas derivan de otras.
+
+Mi valoración del nivel de innovación
+
+A fecha de septiembre de 2026, después de mirar esta literatura, yo lo pondría así:
+
+Idea	Novedad
+LLM genera heurísticas	★☆☆☆☆
+LLM genera código de \(h(s)\) para planning	★★☆☆☆
+LLM genera heurísticas para CVRP	★☆☆☆☆
+Estudiar distribution shift en AHD	★★☆☆☆
+Heurísticas especializadas por clase/distribución	★★☆☆☆
+Numeric PDDL + CVRP + LLM-generated state heuristic	★★★★☆
+Condicionar h(s) por familia CVRP y hacer evaluación cruzada A/B/genérica dentro de planning	★★★★☆
+Todo lo anterior + splits anti-leakage + interpretación de qué estructura aprendió el código	★★★★☆
+
+No te diría ★★★★★ porque acabo de encontrar papers de 2026 que se acercan mucho conceptualmente a specialization/distribution shift.
+
+Pero para un TFM, ★★★★☆ es más que suficiente. De hecho, aquí ya hay material para plantear una contribución experimental genuina.
+
+Y reformularía ligeramente nuestra pregunta
+
+Después de esta búsqueda, yo ya no pondría como gran pregunta únicamente:
+
+¿Puede un LLM generar heurísticas para planificación?
+
+Corrêa ya respondió bastante claramente que sí.
+
+Me gusta mucho más:
+
+¿Puede un LLM utilizar ejemplos representativos de una distribución de instancias CVRP para sintetizar una función heurística de planificación especializada, y cuál es el compromiso entre especialización intra-distribución y capacidad de transferencia fuera de distribución?
+
+Y una segunda:
+
+¿Aporta la especialización condicionada por ejemplos una ventaja frente a una heurística LLM genérica cuando ambas se integran en el mismo planificador y estrategia de búsqueda?
+
+Eso ya no es simplemente repetir Corrêa.
+
+Y hay una cosa especialmente favorable: la literatura de 2026 que acabo de encontrar —EoH-S, RAISE, el trabajo de quality-diversity y SpecAHD— indica que generalización, especialización y distribution shift son precisamente hacia donde se está moviendo ahora mismo Automatic Heuristic Design.
+
+Así que la idea no es “nueva porque nadie haya pensado nada parecido”; es mejor que eso para un TFM: está conectada con una línea de investigación muy actual, pero la aterrizamos en un hueco bastante específico: heuristic search + numeric PDDL + CVRP + family-conditioned algorithm synthesis.
+
+Yo mantendría este diseño. La búsqueda de literatura, en vez de desmontarlo, me lo ha hecho parecer más defendible.
