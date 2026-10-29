@@ -1,0 +1,13 @@
+{
+  "selection": {
+    "E": ["E-n23-k3", "E-n33-k4", "E-n51-k5", "E-n76-k14", "E-n101-k8"],
+    "P": ["P-n16-k8", "P-n23-k8", "P-n50-k10", "P-n76-k4", "P-n101-k4"]
+  },
+  "final": {
+    "E": ["E-n30-k3", "E-n22-k4"],
+    "P": ["P-n19-k2", "P-n40-k5"]
+  },
+  "seed": 1,
+  "alpha": 0.3,
+  "time_limit_seconds": 300
+}
