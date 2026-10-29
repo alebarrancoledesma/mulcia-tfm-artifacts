@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "Si utiliza estos artefactos, cite este repositorio y el trabajo asociado."
+type: dataset
+title: "Artefactos y resultados de Uso de LLMs como Sistemas Heurísticos en Problemas CVRP"
+authors:
+  - family-names: "Barranco Ledesma"
+    given-names: "Alejandro"
+repository-artifact: "https://github.com/alebarrancoledesma/mulcia-tfm-artifacts"
