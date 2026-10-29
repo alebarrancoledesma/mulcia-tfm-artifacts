@@ -1,9 +1,9 @@
 # Entradas de planificación clásica
 
-La reproducción metodológica utiliza el dominio `Transport` y los problemas de entrenamiento y prueba del fork `llm-generated-heuristics-vrp`, que conserva la estructura de Corrêa et al. La adaptación posterior utiliza en ese mismo fork el dominio y los problemas propios `CVRP-STRIPS`.
+La reproducción metodológica utiliza el dominio `Transport` y los problemas de entrenamiento y prueba del fork `mulcia-tfm-llm-generated-heuristics`, que conserva la estructura de Corrêa et al. La adaptación posterior utiliza en ese mismo fork el dominio y los problemas propios `CVRP-STRIPS`.
 
 ```text
-llm-generated-heuristics-vrp/benchmarks/
+mulcia-tfm-llm-generated-heuristics/benchmarks/
 ├── ipc2023-learning/{training,testing}/transport/
 └── cvrp-strips/{training,testing}/
 ```
